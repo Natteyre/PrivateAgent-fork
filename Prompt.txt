@@ -1,0 +1,122 @@
+Role & Objective
+You are an expert mobile developer specializing in Flutter and Native Android (Kotlin). Your goal is to build PrivateAgent, an open-source Android automation app that uses natural language commands and LLM reasoning to interact with the phone’s UI.
+System Architecture
+The application runs on a continuous feedback loop:
+Input: The user enters a natural language task (via text input, voice transcription, or Telegram remote control).
+Screen Analysis: The app reads the native Android screen hierarchy (accessibility tree) and maps the spatial coordinates of interactive nodes (text, inputs, buttons, scrollable views).
+AI Decision: The layout data and task details are sent to a chat LLM (DeepSeek / OpenRouter / NVIDIA NIM API) with a specialized system prompt. The AI decides on a single action (click text, click coordinates, type, scroll, swipe, etc.) and returns it as a JSON payload.
+Execution: The native Android Accessibility Service simulates the action on the screen.
+Iteration: The screen is re-read, and the loop repeats until the goal is marked complete or fails.
+
+Phase 1: Native Android Accessibility Service
+Implement AgentAccessibilityService (extending android.accessibilityservice.AccessibilityService) in Kotlin inside the native Android folder:
+Screen Node Dump (dumpScreen): Recursively traverse rootInActiveWindow and all window hierarchies (windows). Flatten the tree into a list of dictionaries. For each node, extract:
+index: Unique node ID.
+text / contentDescription / className.
+Interaction properties: isClickable, isEditable, isScrollable.
+Coordinates: Screen bounds (left, top, right, bottom) and the exact center point (x, y) for simulation.
+Action Emulation: Implement native simulated interactions:
+click_at(x, y): Execute a short touch gesture using GestureDescription.Builder.
+swipe(startX, startY, endX, endY): Perform a swipe gesture.
+scroll(direction): Perform scroll up/down gestures.
+type_text(text): Focus edit text nodes and send text using Bundle(ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE).
+press_key(keyevent): Handle back key, home key, and keyboard enter key actions.
+takeScreenshot(): Capture the screen using takeScreenshot (Android 11+ / API 30+) and convert it to a Base64 string.
+Communication Bridge: Use a Flutter MethodChannel named com.privateagent/accessibility to send and receive actions/screen data between Dart and Kotlin.
+
+Phase 2: Core Flutter Services (Dart)
+Inside lib/services/, implement the following modular services:
+ScreenAutomationService:
+Exposes clean wrapper functions for the MethodChannel (dumpScreen, takeScreenshot, actions like tap/scroll).
+Formats the node list into a simplified text dump (filtering empty labels, truncating long strings) to reduce LLM token usage.
+Provides a getCompressedScreenDescription function to focus only on elements relevant to the user's task.
+AiService:
+Integrates with OpenRouter, DeepSeek, or custom OpenAI-compatible endpoints.
+Stores settings (API keys, model name, max tokens, custom base URL, temperature, system prompt toggle).
+Manages base prompts to instruct the LLM on generating correct JSON outputs.
+AppLauncherService:
+Queries installed apps and launches them by matching names or package identifiers.
+SkillMemoryService (Macro Replay):
+Keeps a local database (SharedPreferences or SQLite) storing successful action lists for user goals.
+Replays steps immediately when a matching goal is requested, avoiding redundant LLM API calls.
+TelegramService (Remote Control):
+Integrates with the Telegram Bot API using background polling.
+Listens to incoming text messages as commands, executes tasks, and sends screenshots or status updates back to the chat.
+VoiceService:
+Coordinates with speech_to_text and flutter_tts for voice interaction.
+SystemControlService:
+Handles volume, brightness, alarms, contacts, and basic local notifications.
+
+Phase 3: AI Integration & Task Executor Loop
+Implement TaskExecutor to handle the execution loops:
+System Prompt: Instruct the LLM to output a JSON string of the next step:
+json
+{
+ "action": "click_text" | "click_at" | "type_text" | "press_enter" | "scroll" | "swipe" | "press_back" | "press_home" | "open_app" | "wait" | "done",
+ "params": {},
+ "reasoning": "Brief explanation",
+ "is_complete": false
+}
+Loop Logic:
+Check if the accessibility service is enabled.
+Query the skill memory database. If a matching skill is found, replay the actions. If replay fails, fall back to AI.
+Fetch the screen description and pass it to AiService along with history and user task.
+Parse the AI response, extract the JSON object, execute the corresponding action via ScreenAutomationService, wait, and repeat.
+Apply safeguards: Limit loops (default max 15 steps), prevent repeating the same action indefinitely, and utilize RecoveryEngine if stuck.
+
+Phase 4: UI/UX (Flutter screens)
+Design a premium, high-fidelity UI using a Slate-Slate deep theme (dark/light modes supported):
+Onboarding Screen:
+Multi-page guide explaining accessibility service requirements.
+Includes quick-launch buttons to open App Info (to enable "Allow restricted settings" on Android 13+) and Accessibility Settings (to turn on "PrivateAgent Screen Control").
+Home Screen:
+Displays task history log, active task details, and current execution logs.
+Text input for tasks, with a voice transcription microphone button.
+Floating Action Button (FAB) to toggle the Overlay Window.
+Settings Screen:
+Base URL selection (Chips for DeepSeek, OpenRouter, NVIDIA, Custom).
+Form inputs for API Key, Model name, Max steps, Temperature.
+Telegram Bot Settings (Toggle button, API Token input, chat list).
+Theme toggle (Light/Dark/System).
+Task History Screen:
+Detailed list of past tasks, indicating execution step count, status (Success/Failed), and full text logs.
+
+Phase 5: Floating Overlay Window
+Build a floating action widget (OverlayApp) inside a secondary entry point @pragma("vm:entry-point") void overlayMain() using flutter_overlay_window:
+Displays as a small draggable floating bubble.
+Expands to a clean glassmorphism panel showing the current chat transcript.
+Allows the user to type or speak commands, start/pause/cancel tasks, and see real-time agent reasoning/progress while navigating external apps.
+
+Dependencies (pubspec.yaml)
+Include these packages:
+yaml
+dependencies:
+ flutter:
+   sdk: flutter
+ http: ^1.4.0
+ speech_to_text: ^7.0.0
+ flutter_tts: ^4.2.0
+ installed_apps: ^1.5.0
+ url_launcher: ^6.3.0
+ android_intent_plus: ^5.1.0
+ flutter_contacts: ^1.1.9+2
+ permission_handler: ^11.4.0
+ shared_preferences: ^2.3.0
+ path_provider: ^2.1.0
+ flutter_local_notifications: ^18.0.0
+ volume_controller: ^2.0.8
+ screen_brightness: ^1.0.1
+ shizuku_api: ^1.2.2
+ share_plus: ^13.2.0
+ intl: ^0.20.3
+ flutter_overlay_window: ^0.5.0
+ flutter_markdown: ^0.7.7+1
+
+Step-by-Step Execution Guidelines
+Initialize Flutter & Manifest: Setup permissions for Accessibility Service, System Alert Window (Overlay), Internet, Contacts, Notifications, and Query All Packages in Android Manifest.
+Create AgentAccessibilityService.kt: Write the recursive tree traversal, gesture dispatching, and method channel handler. Ensure to register it as an Accessibility Service in AndroidManifest.xml with appropriate accessibility configs.
+Develop Core Services: Write Dart classes for system permissions, app launcher, volume control, and alarm service.
+Write AI Connectors: Build the task parser, system prompts, and api request methods.
+Construct the Task Loop: Wire up TaskExecutor with screens dumps and action execution.
+Implement Overlay Entry Point: Construct the bubble overlay layout and bind communication stream back and forth with the main app.
+Assemble Frontends: Develop the onboarding flow, settings panels, and the main logs screen.
