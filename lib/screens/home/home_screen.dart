@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:intl/intl.dart';
-import 'package:speech_to_text/speech_recognition_result.dart';
 
 import '../../models/task_history_entry.dart';
 import '../../services/screen_automation_service.dart';
@@ -106,25 +105,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() => _listening = false);
       return;
     }
-    final started = await _voice.startListening(
-      onResult: (SpeechRecognitionResult result) {
+    await _voice.startListening(
+      onResult: (String text) {
         if (!mounted) return;
         setState(() {
-          _inputController.text = result.recognizedWords;
-          if (result.finalResult) _listening = false;
+          _inputController.text = text;
         });
       },
+      onDone: () {
+        if (!mounted) return;
+        setState(() => _listening = false);
+      },
     );
-    if (!started && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Speech recognition unavailable — check microphone permission.',
-          ),
-        ),
-      );
-    }
-    setState(() => _listening = started);
+    setState(() => _listening = true);
   }
 
   Future<void> _toggleOverlay() async {
@@ -164,14 +157,41 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       drawer: _sessionsDrawer(theme),
       appBar: AppBar(
-        title: Row(
-          children: [
-            Image.asset('assets/icon/genie_logo.png', width: 30, height: 30),
-            const SizedBox(width: 10),
-            const Text('PrivateAgent'),
-            const SizedBox(width: 10),
-            ServiceStatusDot(enabled: _serviceEnabled),
-          ],
+        title: RichText(
+          text: TextSpan(
+            style: TextStyle(
+              fontSize: 20,
+              color: theme.brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF1E293B),
+            ),
+            children: [
+              TextSpan(
+                text: 'Private',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: theme.colorScheme.primary,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const TextSpan(
+                text: 'Agent',
+                style: TextStyle(
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: Colors.transparent,
+        scrolledUnderElevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_rounded),
+            tooltip: 'Menu',
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
         ),
         actions: [
           IconButton(
@@ -467,45 +487,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _transcript(ThemeData theme) {
     if (_executor.logs.isEmpty) {
       final isGenie = _mode == AppMode.genie;
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isGenie ? Icons.smart_toy_outlined : Icons.chat_outlined,
-                size: 56,
-                color: theme.colorScheme.outline,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isGenie
-                    ? 'What should I do on your phone?'
-                    : 'Chat with PrivateAgent',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                isGenie
-                    ? 'Try: “Open WhatsApp and send a message to Mom”\n'
-                          '“Open YouTube and play lofi music”\n'
-                          '“Open Settings and turn on Bluetooth”'
-                    : 'Ask me anything — questions, ideas, writing,\n'
-                          'translations…\n'
-                          'Switch to Genie mode to control your phone.',
-                textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.6,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      final isDark = theme.brightness == Brightness.dark;
+      return _buildEmptyState(isDark, isGenie, theme);
     }
     return ListView.builder(
       controller: _scrollController,
@@ -515,8 +498,126 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildEmptyState(bool isDark, bool isGenie, ThemeData theme) {
+    final time = DateTime.now();
+    String timeGreeting = 'Hello';
+    if (time.hour >= 5 && time.hour < 12) {
+      timeGreeting = 'Hello, good morning.';
+    } else if (time.hour >= 12 && time.hour < 17) {
+      timeGreeting = 'Hello, good afternoon.';
+    } else if (time.hour >= 17 && time.hour < 22) {
+      timeGreeting = 'Hello, good evening.';
+    } else {
+      timeGreeting = 'Hello.';
+    }
+
+    final suggestions = isGenie
+        ? [
+            'Open YouTube and search for cats',
+            'Call Mom',
+            'Set volume to 80%',
+            "What's on my screen?",
+          ]
+        : [
+            'Write a professional email',
+            'Explain quantum computing simply',
+            'Brainstorm mobile app ideas',
+            'Write a poem about robots',
+          ];
+
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          children: [
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    timeGreeting,
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w300,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                      letterSpacing: -1.5,
+                      height: 1.1,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'How can I help you?',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.primary,
+                      letterSpacing: -1.5,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 48),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'SUGGESTIONS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: isDark
+                      ? const Color(0xFF94A3B8)
+                      : const Color(0xFF475569),
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 40,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: suggestions.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  return ActionChip(
+                    label: Text(
+                      suggestions[index],
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF475569),
+                      ),
+                    ),
+                    backgroundColor: Colors.transparent,
+                    side: BorderSide(
+                      color: isDark
+                          ? const Color(0xFF334155)
+                          : const Color(0xFFE2E8F0),
+                    ),
+                    onPressed: () {
+                      _inputController.text = suggestions[index];
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _inputBar(ThemeData theme) {
     final isGenie = _mode == AppMode.genie;
+    final isDark = theme.brightness == Brightness.dark;
     return SafeArea(
       top: false,
       child: Padding(
@@ -524,33 +625,83 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         child: Row(
           children: [
             Expanded(
-              child: TextField(
-                controller: _inputController,
-                enabled: !_busy,
-                textInputAction: TextInputAction.send,
-                onSubmitted: _submit,
-                minLines: 1,
-                maxLines: 4,
-                decoration: InputDecoration(
-                  hintText: _busy
-                      ? (isGenie ? 'Genie is working…' : 'Thinking…')
-                      : (isGenie ? 'Describe a task…' : 'Message…'),
-                  prefixIcon: const Icon(Icons.chat_bubble_outline, size: 20),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: theme.colorScheme.onSurface.withOpacity(0.08),
+                    width: 1.2,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(isDark ? 0.2 : 0.03),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _inputController,
+                        enabled: !_busy,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: _submit,
+                        minLines: 1,
+                        maxLines: 4,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: _busy
+                              ? (isGenie ? 'Genie is working…' : 'Thinking…')
+                              : (isGenie
+                                    ? 'Describe a task…'
+                                    : 'Message…'),
+                          hintStyle: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.grey[600] : Colors.grey[400],
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 12,
+                          ),
+                          border: InputBorder.none,
+                        ),
+                      ),
+                    ),
+                    // Voice input button
+                    Container(
+                      margin: const EdgeInsets.only(right: 4),
+                      child: IconButton(
+                        tooltip: 'Voice input',
+                        onPressed: _busy ? null : _toggleListening,
+                        icon: Icon(
+                          _listening ? Icons.mic : Icons.mic_none,
+                          color: _listening ? AppTheme.danger : null,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            IconButton.filledTonal(
-              tooltip: 'Voice input',
-              onPressed: _busy ? null : _toggleListening,
-              icon: Icon(_listening ? Icons.mic : Icons.mic_none),
-              color: _listening ? AppTheme.danger : null,
-            ),
-            const SizedBox(width: 4),
-            IconButton.filled(
-              tooltip: isGenie ? 'Run task' : 'Send',
-              onPressed: _busy ? null : () => _submit(_inputController.text),
-              icon: const Icon(Icons.send_rounded),
+            // Solid Send button
+            Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: theme.colorScheme.primary,
+              ),
+              child: IconButton(
+                tooltip: isGenie ? 'Run task' : 'Send',
+                onPressed: _busy ? null : () => _submit(_inputController.text),
+                icon: const Icon(
+                  Icons.send_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
             ),
           ],
         ),
@@ -560,32 +711,92 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   /// Genie (agent) / Chat mode switcher shown above the input bar.
   Widget _modeSwitcher(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: SegmentedButton<AppMode>(
-        showSelectedIcon: false,
-        segments: const [
-          ButtonSegment(
-            value: AppMode.genie,
-            icon: Icon(Icons.auto_awesome, size: 18),
-            label: Text('Genie'),
-            tooltip: 'Agent mode — controls your phone',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _buildModeButton(
+            AppMode.genie,
+            'Genie',
+            Icons.auto_awesome,
+            isDark,
+            theme,
           ),
-          ButtonSegment(
-            value: AppMode.chat,
-            icon: Icon(Icons.chat_bubble_outline, size: 18),
-            label: Text('Chat'),
-            tooltip: 'Chat mode — plain conversation',
+          const SizedBox(width: 12),
+          _buildModeButton(
+            AppMode.chat,
+            'Chat',
+            Icons.chat_bubble_outline,
+            isDark,
+            theme,
           ),
         ],
-        selected: {_mode},
-        onSelectionChanged: _busy
-            ? null
-            : (selection) {
-                final mode = selection.first;
-                setState(() => _mode = mode);
-                SettingsService.instance.setAppMode(mode);
-              },
+      ),
+    );
+  }
+
+  Widget _buildModeButton(
+    AppMode modeId,
+    String label,
+    IconData icon,
+    bool isDark,
+    ThemeData theme,
+  ) {
+    final isSelected = _mode == modeId;
+
+    return GestureDetector(
+      onTap: _busy
+          ? null
+          : () {
+              setState(() => _mode = modeId);
+              SettingsService.instance.setAppMode(modeId);
+            },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(26),
+          color: isSelected
+              ? theme.colorScheme.primary
+              : Colors.transparent,
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: theme.colorScheme.primary.withOpacity(0.20),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF475569)),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected
+                    ? Colors.white
+                    : (isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF475569)),
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

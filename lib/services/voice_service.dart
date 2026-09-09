@@ -1,102 +1,78 @@
-import 'package:flutter_tts/flutter_tts.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:speech_to_text/speech_recognition_result.dart';
-import 'package:speech_to_text/speech_to_text.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
-/// Voice interaction: speech-to-text for commands, text-to-speech for
-/// spoken feedback.
 class VoiceService {
   VoiceService._();
   static final VoiceService instance = VoiceService._();
 
-  final SpeechToText _speech = SpeechToText();
+  final stt.SpeechToText _speech = stt.SpeechToText();
   final FlutterTts _tts = FlutterTts();
+  bool _isInitialized = false;
+  bool _isListening = false;
 
-  bool _speechReady = false;
-  bool _ttsReady = false;
-  bool _listening = false;
+  bool get isListening => _isListening;
 
-  bool get isListening => _listening;
-  bool get isAvailable => _speechReady;
+  Future<void> init() async {
+    if (_isInitialized) return;
 
-  Future<bool> _ensureMicPermission() async {
-    final status = await Permission.microphone.request();
-    return status.isGranted;
+    _isInitialized = await _speech.initialize(
+      onError: (error) {
+        _isListening = false;
+      },
+    );
+
+    // Configure TTS
+    await _tts.setLanguage('en-US');
+    await _tts.setSpeechRate(0.5);
+    await _tts.setVolume(1.0);
+    await _tts.setPitch(1.0);
   }
 
-  Future<bool> initSpeech() async {
-    if (_speechReady) return true;
-    if (!await _ensureMicPermission()) return false;
-    try {
-      _speechReady = await _speech.initialize(
-        onError: (_) => _listening = false,
-        onStatus: (status) {
-          if (status == 'notListening' || status == 'done') {
-            _listening = false;
-          }
-        },
-      );
-    } catch (_) {
-      _speechReady = false;
-    }
-    return _speechReady;
-  }
-
-  Future<void> initTts() async {
-    if (_ttsReady) return;
-    try {
-      await _tts.setLanguage('en-US');
-      await _tts.setSpeechRate(0.5);
-      _ttsReady = true;
-    } catch (_) {
-      _ttsReady = false;
-    }
-  }
-
-  /// Starts a listen session. [onResult] fires on every recognition event
-  /// (check `result.finalResult` for the definitive text).
-  Future<bool> startListening({
-    required void Function(SpeechRecognitionResult result) onResult,
+  /// Start listening for speech. Returns transcribed text via callback.
+  Future<void> startListening({
+    required Function(String) onResult,
+    required Function() onDone,
   }) async {
-    if (!await initSpeech()) return false;
-    if (_listening) await stopListening();
-    _listening = true;
-    try {
-      await _speech.listen(
-        onResult: onResult,
-        listenOptions: SpeechListenOptions(
-          listenFor: const Duration(seconds: 30),
-          pauseFor: const Duration(seconds: 3),
-        ),
-      );
-      return true;
-    } catch (_) {
-      _listening = false;
-      return false;
-    }
+    if (!_isInitialized) await init();
+    if (!_isInitialized) return;
+
+    _isListening = true;
+
+    await _speech.listen(
+      onResult: (SpeechRecognitionResult result) {
+        if (result.finalResult) {
+          _isListening = false;
+          onResult(result.recognizedWords);
+          onDone();
+        }
+      },
+      listenOptions: stt.SpeechListenOptions(
+        listenMode: stt.ListenMode.confirmation,
+        partialResults: false,
+      ),
+    );
   }
 
+  /// Stop listening
   Future<void> stopListening() async {
-    if (!_listening) return;
-    _listening = false;
-    try {
-      await _speech.stop();
-    } catch (_) {}
+    _isListening = false;
+    await _speech.stop();
   }
 
+  /// Speak text aloud
   Future<void> speak(String text) async {
-    if (text.trim().isEmpty) return;
-    await initTts();
-    if (!_ttsReady) return;
-    try {
-      await _tts.stop();
-      await _tts.speak(text);
-    } catch (_) {}
+    if (text.isEmpty) return;
+    await _tts.speak(text);
   }
 
+  /// Stop speaking
   Future<void> stopSpeaking() async {
-    try {
-      await _tts.stop();
-    } catch (_) {}
+    await _tts.stop();
+  }
+
+  void dispose() {
+    _speech.stop();
+    _tts.stop();
   }
 }

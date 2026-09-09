@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// PrivateAgent design system — a premium "Slate" deep theme with indigo
 /// accents, in both dark and light variants.
@@ -29,19 +30,21 @@ class AppTheme {
     final scheme = ColorScheme.fromSeed(
       seedColor: indigo,
       brightness: Brightness.dark,
-      surface: slate900,
+      surface: const Color(0xFF151D30),
     ).copyWith(
       primary: indigoLight,
+      secondary: const Color(0xFF38BDF8),
       onPrimary: slate950,
-      surface: slate900,
+      surface: const Color(0xFF151D30),
       surfaceContainerHighest: slate800,
       onSurface: slate100,
       onSurfaceVariant: slate400,
       outline: slate700,
+      error: Colors.redAccent,
     );
     return _base(scheme).copyWith(
-      scaffoldBackgroundColor: slate950,
-      cardColor: slate900,
+      scaffoldBackgroundColor: const Color(0xFF0B0F19),
+      cardColor: const Color(0xFF151D30),
     );
   }
 
@@ -52,11 +55,13 @@ class AppTheme {
       surface: slate50,
     ).copyWith(
       primary: const Color(0xFF4F46E5),
+      secondary: const Color(0xFF0EA5E9),
       surface: slate50,
       surfaceContainerHighest: Colors.white,
       onSurface: slate900,
       onSurfaceVariant: slate600,
       outline: slate300,
+      error: Colors.redAccent,
     );
     return _base(scheme).copyWith(
       scaffoldBackgroundColor: slate50,
@@ -69,10 +74,23 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: scheme,
       appBarTheme: AppBarTheme(
-        centerTitle: false,
+        centerTitle: true,
         elevation: 0,
+        scrolledUnderElevation: 0,
         backgroundColor: Colors.transparent,
         foregroundColor: scheme.onSurface,
+        iconTheme: IconThemeData(color: scheme.onSurface),
+        systemOverlayStyle: scheme.brightness == Brightness.light
+            ? const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.dark,
+                statusBarBrightness: Brightness.light,
+              )
+            : const SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: Brightness.light,
+                statusBarBrightness: Brightness.dark,
+              ),
         titleTextStyle: TextStyle(
           color: scheme.onSurface,
           fontSize: 20,
@@ -84,23 +102,23 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: scheme.outline.withValues(alpha: 0.4)),
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: scheme.outline.withValues(alpha: 0.4), width: 1.2),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: scheme.surfaceContainerHighest,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.5)),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
           borderSide: BorderSide(color: scheme.primary, width: 1.6),
         ),
         contentPadding:
@@ -109,17 +127,17 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
         ),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         side: BorderSide(color: scheme.outline.withValues(alpha: 0.5)),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       dividerTheme: DividerThemeData(
         color: scheme.outline.withValues(alpha: 0.4),

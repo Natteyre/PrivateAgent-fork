@@ -60,7 +60,7 @@ class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
     final entries = _executor.historyEntries;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Task History'),
+        title: Text('Task History (${_executor.historyEntries.length})'),
         actions: [
           if (entries.isNotEmpty)
             IconButton(

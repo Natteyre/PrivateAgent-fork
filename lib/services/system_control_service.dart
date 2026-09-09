@@ -1,6 +1,6 @@
 import 'dart:io' show Platform;
 
-import 'package:android_intent_plus/android_intent.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:screen_brightness/screen_brightness.dart';
@@ -22,10 +22,14 @@ class SystemControlService {
   SystemControlService._();
   static final SystemControlService instance = SystemControlService._();
 
+  static const _channel = MethodChannel('com.orailnoor.privateagent/system');
+
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   bool _notificationsReady = false;
   final ShizukuApi _shizuku = ShizukuApi();
+  final _volumeController = VolumeController();
+  final _brightnessController = ScreenBrightness();
 
   // ------------------------------------------------------------------
   // Volume
@@ -33,7 +37,7 @@ class SystemControlService {
 
   Future<double> getVolume() async {
     try {
-      return await VolumeController.instance.getVolume();
+      return _volumeController.getVolume();
     } catch (_) {
       return 0;
     }
@@ -41,7 +45,7 @@ class SystemControlService {
 
   Future<void> setVolume(double value) async {
     try {
-      await VolumeController.instance.setVolume(value.clamp(0.0, 1.0));
+      _volumeController.setVolume(value.clamp(0.0, 1.0));
     } catch (_) {}
   }
 
@@ -50,7 +54,11 @@ class SystemControlService {
 
   Future<void> setMuted(bool muted) async {
     try {
-      await VolumeController.instance.setMute(muted);
+      if (muted) {
+        _volumeController.muteVolume();
+      } else {
+        _volumeController.setVolume(0.5);
+      }
     } catch (_) {}
   }
 
@@ -58,41 +66,26 @@ class SystemControlService {
   // Brightness
   // ------------------------------------------------------------------
 
-  /// Sets system brightness (requires WRITE_SETTINGS). Falls back to
-  /// app-only brightness when the permission is missing.
   Future<bool> setBrightness(double value) async {
     final v = value.clamp(0.0, 1.0);
     try {
-      if (await ScreenBrightness.instance.canChangeSystemBrightness) {
-        await ScreenBrightness.instance.setSystemScreenBrightness(v);
-        return true;
-      }
-      await ScreenBrightness.instance.setApplicationScreenBrightness(v);
+      await _brightnessController.setScreenBrightness(v);
       return true;
     } catch (_) {
-      try {
-        await ScreenBrightness.instance.setApplicationScreenBrightness(v);
-        return true;
-      } catch (_) {
-        return false;
-      }
+      return false;
     }
   }
 
   Future<double?> getBrightness() async {
     try {
-      return await ScreenBrightness.instance.system;
+      return await _brightnessController.current;
     } catch (_) {
-      try {
-        return await ScreenBrightness.instance.application;
-      } catch (_) {
-        return null;
-      }
+      return null;
     }
   }
 
   // ------------------------------------------------------------------
-  // Alarms
+  // Alarms (native MethodChannel — no android_intent_plus needed)
   // ------------------------------------------------------------------
 
   Future<bool> setAlarm({
@@ -102,15 +95,11 @@ class SystemControlService {
   }) async {
     if (!Platform.isAndroid) return false;
     try {
-      final intent = AndroidIntent(
-        action: 'android.intent.action.SET_ALARM',
-        arguments: {
-          'android.intent.extra.alarm.HOUR': hour,
-          'android.intent.extra.alarm.MINUTES': minute,
-          'android.intent.extra.alarm.MESSAGE': label,
-        },
-      );
-      await intent.launch();
+      await _channel.invokeMethod('setAlarm', {
+        'hour': hour,
+        'minute': minute,
+        'label': label,
+      });
       return true;
     } catch (_) {
       return false;
@@ -123,30 +112,27 @@ class SystemControlService {
 
   Future<bool> requestContactsPermission() async {
     try {
-      final status =
-          await FlutterContacts.permissions.request(PermissionType.read);
-      return status == PermissionStatus.granted;
+      return await FlutterContacts.requestPermission();
     } catch (_) {
       return false;
     }
   }
 
-  /// Fuzzy name search; returns up to [limit] hits with first phone number.
   Future<List<ContactHit>> searchContacts(String query,
       {int limit = 10}) async {
     final q = query.trim().toLowerCase();
     if (q.isEmpty) return const [];
     if (!await requestContactsPermission()) return const [];
     try {
-      final contacts = await FlutterContacts.getAll(
-        properties: {ContactProperty.phone},
+      final contacts = await FlutterContacts.getContacts(
+        withProperties: true,
       );
       final hits = <ContactHit>[];
       for (final c in contacts) {
-        final name = c.displayName ?? '';
+        final name = c.displayName;
         if (name.toLowerCase().contains(q)) {
           hits.add(ContactHit(
-            id: c.id ?? '',
+            id: c.id,
             name: name,
             phone: c.phones.isEmpty ? null : c.phones.first.number,
           ));
@@ -177,7 +163,7 @@ class SystemControlService {
     const settings = InitializationSettings(
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
     );
-    await _notifications.initialize(settings: settings);
+    await _notifications.initialize(settings);
     _notificationsReady = true;
   }
 
@@ -194,10 +180,10 @@ class SystemControlService {
         ),
       );
       await _notifications.show(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
-        title: title,
-        body: body,
-        notificationDetails: details,
+        DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+        title,
+        body,
+        details,
       );
     } catch (_) {}
   }
@@ -206,8 +192,6 @@ class SystemControlService {
   // Shizuku (optional privileged shell)
   // ------------------------------------------------------------------
 
-  /// Runs an ADB-shell-level command through Shizuku when it is installed,
-  /// running and has granted permission. Returns null when unavailable.
   Future<String?> runShizukuCommand(String command) async {
     try {
       final running = await _shizuku.pingBinder() ?? false;

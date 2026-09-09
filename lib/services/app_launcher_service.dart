@@ -13,9 +13,8 @@ class AppLauncherService {
     if (_cache != null && !forceRefresh) return _cache!;
     try {
       _cache = await InstalledApps.getInstalledApps(
-        excludeSystemApps: false,
-        excludeNonLaunchableApps: true,
-        withIcon: false,
+        false, // excludeSystemApps = false
+        false, // withIcon = false
       );
     } catch (_) {
       _cache = const [];
