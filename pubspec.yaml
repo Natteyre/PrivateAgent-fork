@@ -64,7 +64,6 @@ dependencies:
   screen_brightness: ^1.0.1
 
   # Shizuku (optional)
-  shizuku_api: ^1.2.2
   share_plus: ^13.2.0
   intl: ^0.20.3
   flutter_overlay_window: ^0.5.0

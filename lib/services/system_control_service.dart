@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:screen_brightness/screen_brightness.dart';
-import 'package:shizuku_api/shizuku_api.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:volume_controller/volume_controller.dart';
 
@@ -27,7 +26,6 @@ class SystemControlService {
   final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
   bool _notificationsReady = false;
-  final ShizukuApi _shizuku = ShizukuApi();
   final _volumeController = VolumeController();
   final _brightnessController = ScreenBrightness();
 
@@ -188,22 +186,3 @@ class SystemControlService {
     } catch (_) {}
   }
 
-  // ------------------------------------------------------------------
-  // Shizuku (optional privileged shell)
-  // ------------------------------------------------------------------
-
-  Future<String?> runShizukuCommand(String command) async {
-    try {
-      final running = await _shizuku.pingBinder() ?? false;
-      if (!running) return null;
-      var granted = await _shizuku.checkPermission() ?? false;
-      if (!granted) {
-        granted = await _shizuku.requestPermission() ?? false;
-      }
-      if (!granted) return null;
-      return await _shizuku.runCommand(command);
-    } catch (_) {
-      return null;
-    }
-  }
-}

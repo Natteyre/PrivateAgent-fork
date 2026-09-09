@@ -640,14 +640,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.4.1"
-  shizuku_api:
-    dependency: "direct main"
-    description:
-      name: shizuku_api
-      sha256: "28a0a15e1e5af797c81b10a97346dcaee952fea52318d985fd67e41f43d71d6f"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.2.3"
   sky_engine:
     dependency: transitive
     description: flutter
