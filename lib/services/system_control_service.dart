@@ -185,4 +185,5 @@ class SystemControlService {
       );
     } catch (_) {}
   }
+}
 
